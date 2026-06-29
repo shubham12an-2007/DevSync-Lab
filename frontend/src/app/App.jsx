@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import Editor from "@monaco-editor/react";
 import * as Y from "yjs";
 import { MonacoBinding } from "y-monaco";
-import { WebsocketProvider } from "y-websocket";
+import { io as socketIO } from "socket.io-client";
 
 export default function App() {
   // Connected users list with roles and custom avatars
@@ -37,33 +37,49 @@ export default function App() {
     editorRef.current = editor;
 
     try {
-      // 1. Initialize Yjs Shared Document
-      const ydoc = new Y.Doc();
+      const socket = socketIO("http://localhost:3000");
+      const roomId = "docker-aws-room";
+      let isReceiving = false;
 
-      // 2. Setup Real-time WebSocket connection to backend gateway (Port: 4000)
-      const provider = new WebsocketProvider(
-        "ws://localhost:4000",
-        "docker-aws-room", // Unique Room ID
-        ydoc,
-      );
+      socket.on("connect", () => {
+        console.log("⚡ Connected to real-time sync server!");
+        socket.emit("join-room", roomId);
+      });
 
-      // 3. Define a shared text space for concurrent code merges
-      const ytext = ydoc.getText("monaco");
+      // Shuruat me state lane ke liye
+      socket.on("init-state", (initialText) => {
+        if (editorRef.current.getValue() === "" && initialText) {
+          isReceiving = true;
+          editorRef.current.setValue(initialText);
+          isReceiving = false;
+        }
+      });
 
-      // 4. Create the CRDT data binding between Monaco Editor and Yjs
-      const binding = new MonacoBinding(
-        ytext,
-        editorRef.current.getModel(),
-        new Set([editorRef.current]),
-        provider.awareness,
-      );
+      // Jab aap type karo, tabhi server ko bhejo
+      editorRef.current.onDidChangeModelContent(() => {
+        if (isReceiving) return; // Agar socket se update aaya hai toh server ko wapas mat bhejo
 
-      console.log("⚡ DevSync Engine: Yjs and WebSocket Binded Successfully!");
+        const fullCode = editorRef.current.getValue();
+        socket.emit("code-update", { roomId, change: fullCode });
+      });
+
+      // Jab server se naya code mile
+      socket.on("code-receive", (newCode) => {
+        // Agar local code aur received code alag hai, tabhi update karo
+        if (editorRef.current.getValue() !== newCode) {
+          isReceiving = true;
+
+          const position = editorRef.current.getPosition();
+          editorRef.current.setValue(newCode);
+          editorRef.current.setPosition(position);
+
+          isReceiving = false;
+        }
+      });
     } catch (error) {
-      console.error("Error setting up collaborative binding:", error);
+      console.error("Sync attachment failed:", error);
     }
   }
-
   return (
     <div className="w-screen h-screen bg-[#0B0F19] text-[#E2E8F0] flex flex-col font-sans overflow-hidden antialiased selection:bg-indigo-500/30">
       {/* HEADERBAR */}
