@@ -1,8 +1,11 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Editor from "@monaco-editor/react";
+import * as Y from "yjs";
+import { MonacoBinding } from "y-monaco";
+import { WebsocketProvider } from "y-websocket";
 
 export default function App() {
-  // Connected users list
+  // Connected users list with roles and custom avatars
   const [users, setUsers] = useState([
     {
       id: 1,
@@ -27,20 +30,39 @@ export default function App() {
     },
   ]);
 
-  const [code, setCode] = useState(`// Welcome to DevSync Pro
-// Powered by VS Code Monaco Editor 🚀
+  const editorRef = useRef(null);
 
-function connectSocket() {
-  console.log("Syncing changes across users...");
-}
+  // This function automatically runs when the Monaco Editor mounts on screen
+  function handleEditorDidMount(editor, monaco) {
+    editorRef.current = editor;
 
-connectSocket();`);
+    try {
+      // 1. Initialize Yjs Shared Document
+      const ydoc = new Y.Doc();
 
-  const handleEditorChange = (value) => {
-    setCode(value);
-  };
+      // 2. Setup Real-time WebSocket connection to backend gateway (Port: 4000)
+      const provider = new WebsocketProvider(
+        "ws://localhost:4000",
+        "docker-aws-room", // Unique Room ID
+        ydoc,
+      );
 
-  console.log(setUsers);
+      // 3. Define a shared text space for concurrent code merges
+      const ytext = ydoc.getText("monaco");
+
+      // 4. Create the CRDT data binding between Monaco Editor and Yjs
+      const binding = new MonacoBinding(
+        ytext,
+        editorRef.current.getModel(),
+        new Set([editorRef.current]),
+        provider.awareness,
+      );
+
+      console.log("⚡ DevSync Engine: Yjs and WebSocket Binded Successfully!");
+    } catch (error) {
+      console.error("Error setting up collaborative binding:", error);
+    }
+  }
 
   return (
     <div className="w-screen h-screen bg-[#0B0F19] text-[#E2E8F0] flex flex-col font-sans overflow-hidden antialiased selection:bg-indigo-500/30">
@@ -55,22 +77,24 @@ connectSocket();`);
           <div className="h-4 w-[1px] bg-slate-800 mx-1"></div>
           <h1 className="text-sm font-semibold tracking-tight text-slate-200">
             devsync{" "}
-            <span className="text-indigo-400 font-normal">/ room-alpha</span>
+            <span className="text-indigo-400 font-normal">
+              / docker-aws-room
+            </span>
           </h1>
         </div>
 
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2 bg-slate-900 px-3 py-1.5 rounded-lg border border-slate-800 text-xs text-slate-400 font-mono">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-            socket: connected
+            Yjs Engine: Syncing
           </div>
-          <button className="bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-xs px-4 py-1.5 rounded-lg transition-colors shadow-lg shadow-indigo-600/20">
+          <button className="bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-xs px-4 py-1.5 rounded-lg transition-colors shadow-lg shadow-indigo-600/20 active:scale-95">
             Share Invite
           </button>
         </div>
       </header>
 
-      {/* MAIN WORKSPACE */}
+      {/* WORKSPACE AREA */}
       <main className="flex-1 flex p-4 gap-4 overflow-hidden bg-gradient-to-b from-[#0F1424] to-[#0B0F19]">
         {/* LEFT PANEL: Connected Users */}
         <aside className="w-72 bg-[#0F1424]/40 border border-slate-800/80 rounded-2xl flex flex-col p-4 backdrop-blur-sm">
@@ -83,6 +107,7 @@ connectSocket();`);
             </span>
           </div>
 
+          {/* User Cards List */}
           <div className="flex-1 flex flex-col gap-2 overflow-y-auto">
             {users.map((user) => (
               <div
@@ -93,6 +118,7 @@ connectSocket();`);
                     : "bg-transparent border-transparent opacity-40"
                 }`}
               >
+                {/* Avatar with Initials */}
                 <div
                   className={`w-9 h-9 rounded-xl bg-gradient-to-br ${user.color} flex items-center justify-center text-white text-xs font-bold shadow-md`}
                 >
@@ -102,6 +128,7 @@ connectSocket();`);
                     .join("")}
                 </div>
 
+                {/* Details */}
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-medium text-slate-200 truncate">
                     {user.name}
@@ -111,6 +138,7 @@ connectSocket();`);
                   </p>
                 </div>
 
+                {/* Status pulse */}
                 {user.isOnline && (
                   <span className="relative flex h-2 w-2">
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
@@ -123,14 +151,16 @@ connectSocket();`);
 
           <div className="mt-auto pt-4 border-t border-slate-850">
             <div className="bg-[#131A30]/40 p-3 rounded-xl border border-slate-800/50 text-center">
-              <p className="text-[11px] text-slate-400">AWS Workspace Active</p>
+              <p className="text-[11px] text-slate-400">
+                AWS Workspace Infrastructure
+              </p>
             </div>
           </div>
         </aside>
 
-        {/* RIGHT PANEL: Real React Monaco Editor */}
+        {/* RIGHT PANEL: High-End Real-Time React Editor */}
         <section className="flex-1 bg-[#1e1e1e] border border-slate-800/80 rounded-2xl flex flex-col overflow-hidden shadow-2xl">
-          {/* Editor Tabs Header */}
+          {/* Editor Header Tab */}
           <div className="h-12 bg-[#181818] border-b border-slate-800 flex items-center px-4 justify-between">
             <div className="flex items-center gap-2">
               <div className="bg-[#1e1e1e] text-slate-300 text-xs px-4 py-2 rounded-t-lg font-mono border-t-2 border-indigo-500 flex items-center gap-2">
@@ -138,24 +168,25 @@ connectSocket();`);
                 main.js
               </div>
             </div>
-            <div className="text-xs text-gray-500 font-mono">Monaco Engine</div>
+            <span className="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded font-mono">
+              CRDT Active
+            </span>
           </div>
 
-          {/* Real VS Code Editor Integration */}
+          {/* Integrated VS-Code Engine Container */}
           <div className="flex-1 w-full pt-2 bg-[#1e1e1e]">
             <Editor
               height="100%"
               defaultLanguage="javascript"
               theme="vs-dark"
-              value={code}
-              onChange={handleEditorChange}
+              onMount={handleEditorDidMount}
               options={{
                 fontSize: 14,
-                minimap: { enabled: true },
+                minimap: { enabled: false },
                 wordWrap: "on",
-                lineNumbers: "on",
                 automaticLayout: true,
-                tabSize: 2,
+                cursorBlinking: "smooth",
+                smoothScrolling: true,
               }}
             />
           </div>
