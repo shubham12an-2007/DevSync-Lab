@@ -5,7 +5,6 @@ import { MonacoBinding } from "y-monaco";
 import { io as socketIO } from "socket.io-client";
 
 export default function App() {
-  // Connected users list with roles and custom avatars
   const [users, setUsers] = useState([
     {
       id: 1,
@@ -32,7 +31,6 @@ export default function App() {
 
   const editorRef = useRef(null);
 
-  // This function automatically runs when the Monaco Editor mounts on screen
   function handleEditorDidMount(editor, monaco) {
     editorRef.current = editor;
 
